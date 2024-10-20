@@ -9,9 +9,13 @@ import java.io.DataOutputStream
 import java.io.IOException
 import java.net.InetAddress
 import java.net.Socket
+import kotlin.io.path.Path
+import kotlin.io.path.absolute
+import kotlin.io.path.readText
 
 private const val PORT = 23456
 private const val ADDRESS = "127.0.0.1"
+private val PATH = Path("src", "jsondatabase", "client", "data")
 
 fun main(args: Array<String>) {
     val request: Server.Request = composeRequest(args)
@@ -45,6 +49,11 @@ fun composeRequest(args: Array<String>): Server.Request {
             "-t" -> type = args[i + 1]
             "-k" -> key = args[i + 1]
             "-v" -> value = args[i + 1]
+            "-in" -> {
+                val completePath = PATH.resolve(args[i + 1])
+                val command = completePath.absolute().readText()
+                return Json.decodeFromString(Server.Request.serializer(), command)
+            }
             else -> {}
         }
     }
