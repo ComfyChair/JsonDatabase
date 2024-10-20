@@ -1,5 +1,9 @@
 package jsondatabase.client
 
+import jsondatabase.server.Server
+import jsondatabase.server.Server.RequestType
+import kotlinx.serialization.*
+import kotlinx.serialization.json.*
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
@@ -10,15 +14,16 @@ private const val PORT = 23456
 private const val ADDRESS = "127.0.0.1"
 
 fun main(args: Array<String>) {
-    val request: String = composeRequest(args)
+    val request: Server.Request = composeRequest(args)
+    val jsonRequest = Json.encodeToString(request)
     try {
         Socket(InetAddress.getByName(ADDRESS), PORT).use { socket ->
             DataInputStream(socket.getInputStream()).use { input ->
                 DataOutputStream(socket.getOutputStream()).use { output ->
                     println("Client started!")
-                    output.writeUTF(request)
-                    println("Sent: $request")
-                    if (request != "exit") {
+                    output.writeUTF(jsonRequest)
+                    println("Sent: $jsonRequest")
+                    if (request.type != RequestType.exit) {
                         val reply = input.readUTF()
                         println("Received: $reply")
                     }
@@ -31,10 +36,18 @@ fun main(args: Array<String>) {
     }
 }
 
-fun composeRequest(args: Array<String>): String {
-    val returnString = StringBuilder()
-    for (i in 1..args.lastIndex step 2) {
-        returnString.append("${args[i]} ")
+fun composeRequest(args: Array<String>): Server.Request {
+    var type = ""
+    var key = ""
+    var value = ""
+    for (i in 0..args.lastIndex step 2) {
+        when (args[i]) {
+            "-t" -> type = args[i + 1]
+            "-k" -> key = args[i + 1]
+            "-v" -> value = args[i + 1]
+            else -> {}
+        }
     }
-    return returnString.toString().trim()
+    val request = Server.Request(RequestType.valueOf(type.lowercase()), key, value)
+    return request
 }
