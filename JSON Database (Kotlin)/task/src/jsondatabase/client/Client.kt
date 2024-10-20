@@ -9,17 +9,19 @@ import java.net.Socket
 private const val PORT = 23456
 private const val ADDRESS = "127.0.0.1"
 
-fun main() {
+fun main(args: Array<String>) {
+    val request: String = composeRequest(args)
     try {
         Socket(InetAddress.getByName(ADDRESS), PORT).use { socket ->
             DataInputStream(socket.getInputStream()).use { input ->
                 DataOutputStream(socket.getOutputStream()).use { output ->
                     println("Client started!")
-                    val msg = "Give me a record # 12"
-                    output.writeUTF(msg)
-                    println("Sent: $msg")
-                    val reply = input.readUTF()
-                    println("Received: $reply")
+                    output.writeUTF(request)
+                    println("Sent: $request")
+                    if (request != "exit") {
+                        val reply = input.readUTF()
+                        println("Received: $reply")
+                    }
                 }
             }
         }
@@ -27,4 +29,12 @@ fun main() {
     catch (e: IOException) {
         e.printStackTrace()
     }
+}
+
+fun composeRequest(args: Array<String>): String {
+    val returnString = StringBuilder()
+    for (i in 1..args.lastIndex step 2) {
+        returnString.append("${args[i]} ")
+    }
+    return returnString.toString().trim()
 }
