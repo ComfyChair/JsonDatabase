@@ -21,6 +21,7 @@ fun main(args: Array<String>) {
     val request: Server.Request = composeRequest(args)
     val jsonRequest = Json.encodeToString(request)
     try {
+        println("-----------------------------------")
         Socket(InetAddress.getByName(ADDRESS), PORT).use { socket ->
             DataInputStream(socket.getInputStream()).use { input ->
                 DataOutputStream(socket.getOutputStream()).use { output ->
@@ -54,7 +55,7 @@ fun composeRequest(args: Array<String>): Server.Request {
             "-in" -> {
                 val completePath = PATH.resolve(args[i + 1])
                 val command = completePath.absolute().readText()
-                println("Decoding command: $command")
+                //println("Decoding command: $command")
                 return json.decodeFromString(Server.Request.serializer(), command)
             }
             else -> {}

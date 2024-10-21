@@ -4,7 +4,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.DataInputStream
@@ -63,7 +62,7 @@ object Server {
             RequestType.set -> executor.submit(
                 Callable {
                     synchronized(writeLock) {
-                        database.set(request.key, request.value!!)
+                        database.set(request.key, request.value)
                     }
                 }
             )

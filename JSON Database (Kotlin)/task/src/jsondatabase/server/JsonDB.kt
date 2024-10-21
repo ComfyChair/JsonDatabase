@@ -16,36 +16,44 @@ class JsonDB(path: Path) {
     // values can be Strings or nested MutableMaps, therefore declared as Any
     // -> should be encoded as JSON primitives or JSON Objects
     @Serializable
-    private lateinit var content : MutableMap<String, JsonElement>
+    private var content : MutableMap<String, JsonElement>
     private val file: File = path.toFile()
         .also {
             if (it.exists()) {
-                println("Reading file")
                 content = Json.decodeFromString<MutableMap<String, JsonElement>>(it.readText())
+                println("\nRead database file: in ${it.absolutePath}:\n$content\n")
             } else {
-                println("Creating file in ${it.absolutePath}")
                 if (!it.parentFile.exists()) {
                     it.parentFile.mkdirs()
                 }
                 it.createNewFile()
-                it.writeText(Json.encodeToString(mutableMapOf<String, Any>()))
+                content = mutableMapOf()
+                it.writeText(Json.encodeToString(content))
             }
         }
 
     fun get(requestKey: JsonElement): Response {
         val keys = parseKeys(requestKey)
-        val parent = traverseTo(keys.dropLast(1))
-        val value : JsonElement? = (parent as? JsonObject)?.get(keys.last())
-        return if (value != null) {
-            Response(OK, Json.encodeToString(parent))
+        if (keys.size < 2) {
+            val value = content[keys.first()]
+            return if (value != null) {
+                Response(OK, value)
+            } else {
+                Response(ERROR, reason =  NO_SUCH_KEY)
+            }
         } else {
-            Response(ERROR, reason =  NO_SUCH_KEY)
+            val parent : JsonObject? = traverseTo(keys.dropLast(1))
+            val value : JsonElement? = parent?.get(keys.last())
+            return if (value != null) {
+                Response(OK, value)
+            } else {
+                Response(ERROR, reason =  NO_SUCH_KEY)
+            }
         }
     }
 
     fun set(requestKey: JsonElement, requestValue: JsonElement) : Response {
         val keys = parseKeys(requestKey)
-        println("Called set with key: $keys, value: $requestValue")
         updateContent(keys, requestValue)
         file.writeText(Json.encodeToString(content))
         return Response(OK)
@@ -53,72 +61,78 @@ class JsonDB(path: Path) {
 
     fun delete(requestKey: JsonElement) : Response {
         val keys = parseKeys(requestKey)
-        var secondToLast: Any? = content
-        for (key in keys.dropLast(1)) {
-            if (secondToLast != null && secondToLast is Map<*, *>) {
-                secondToLast = secondToLast[key]
-            } else {
-                secondToLast = null
-                break
-            }
+        val keyQueue = LinkedList(keys)
+        // traverse down
+        var parent = JsonObject(content)
+        var child: JsonElement? = content[keyQueue.pop()]
+        while (keyQueue.isNotEmpty() && child is JsonObject) {
+            parent = child
+            child = parent[keyQueue.pop()]
         }
-        val removed : Any? = (secondToLast as? MutableMap<*, *>)?.remove(keys.last())
-        if (removed != null) {
+        if (keyQueue.isEmpty()) {
+            // key present, we can proceed
+            val newParent = parent.toMutableMap()
+            newParent.remove(keys.last())
+            updateContent(keys.dropLast(1), JsonObject(newParent))
             file.writeText(Json.encodeToString(content))
             return Response(OK)
         } else {
+            // key not present
             return Response(ERROR, reason =  NO_SUCH_KEY)
         }
     }
 
-    private fun traverseTo(keys: List<String>): JsonElement? {
+    private fun traverseTo(keys: List<String>): JsonObject? {
         var currentNode : JsonElement? = content[keys[0]]
-        for (i in 1 until keys.size - 1) {
+        for (i in 1 until keys.size) {
             if (currentNode is JsonPrimitive) {
-                currentNode = null
-                break
+                return null
             } else {
                 currentNode = (currentNode as JsonObject)[keys[i]]
             }
         }
-        return currentNode
+        return (currentNode as JsonObject?)
     }
     private fun updateContent(inKeys: List<String>, inValue: JsonElement) {
         // traverse tree until first missing key or JsonPrimitive
+        //TODO: simplify or restructure?
         val keyQueue : LinkedList<String> = LinkedList(inKeys)
-        var rootKey: String = keyQueue.poll()
-        var rootElement : JsonElement? = content[rootKey]
-        while (rootElement != null && rootElement is JsonObject && keyQueue.isNotEmpty()) {
-            rootKey = keyQueue.poll()
-            rootElement = (rootElement)[rootKey]
+        var childKey: String = keyQueue.poll()
+        var parentElement: Map<String, JsonElement> = content
+        var childElement : JsonElement? = content[childKey]
+        val keyStack = Stack<String>()
+        val parentStack = Stack<JsonObject>()
+        keyStack.push(childKey)
+        // traverse down, looking for existing keys
+        while (childElement != null && childElement is JsonObject && keyQueue.isNotEmpty()) {
+            childKey = keyQueue.poll()
+            parentElement = childElement
+            childElement = childElement[childKey]
+            keyStack.push(childKey)
+            parentStack.push(parentElement)
         }
-        // traverse remaining keys backwards, creating JsonElements
+        //traverse up, updating values
         var insertionElement : JsonElement = inValue
-        for (key in keyQueue.asReversed()) {
-            insertionElement = JsonObject(mapOf(key to insertionElement))
+        while (keyStack.size > 1) {
+            val parentMap = parentStack.pop().toMutableMap()
+            parentMap[keyStack.pop()] = insertionElement
+            insertionElement = JsonObject(parentMap)
         }
-        content[rootKey] = insertionElement
+        content[keyStack.pop()] = insertionElement
     }
 
     @Serializable
-    data class Response(val response: String, val value: String = "", val reason: String = "")
+    data class Response(val response: String,
+                        val value: JsonElement = JsonPrimitive(""),
+                        val reason: String = "")
 
     companion object {
         private fun parseKeys(keyElement: JsonElement): List<String> {
             return if (keyElement is JsonArray) {
-                keyElement.map { item -> item.toString() }
+                keyElement.map { item -> item.toString().trim('"') }
             } else {
-                listOf(keyElement.toString())
+                listOf(keyElement.toString().trim('"'))
             }
-        }
-        private fun parseValue(valueString: String): JsonElement {
-            val value : JsonElement = if (valueString.startsWith("{")) {
-                Json.decodeFromString<JsonElement>(valueString)
-            } else {
-                JsonPrimitive(valueString)
-            }
-            println(value)
-            return value
         }
     }
 }
