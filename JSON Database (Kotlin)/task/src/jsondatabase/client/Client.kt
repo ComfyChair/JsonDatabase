@@ -40,19 +40,22 @@ fun main(args: Array<String>) {
     }
 }
 
+private val json = Json { isLenient = true }
+
 fun composeRequest(args: Array<String>): Server.Request {
     var type = ""
-    var key = ""
-    var value = ""
+    var key = JsonPrimitive("")
+    var value = JsonPrimitive("")
     for (i in 0..args.lastIndex step 2) {
         when (args[i]) {
             "-t" -> type = args[i + 1]
-            "-k" -> key = args[i + 1]
-            "-v" -> value = args[i + 1]
+            "-k" -> key = JsonPrimitive(args[i + 1])
+            "-v" -> value = JsonPrimitive(args[i + 1])
             "-in" -> {
                 val completePath = PATH.resolve(args[i + 1])
                 val command = completePath.absolute().readText()
-                return Json.decodeFromString(Server.Request.serializer(), command)
+                println("Decoding command: $command")
+                return json.decodeFromString(Server.Request.serializer(), command)
             }
             else -> {}
         }

@@ -4,6 +4,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonPrimitive
 import java.io.DataInputStream
 import java.io.DataOutputStream
 import java.io.IOException
@@ -60,7 +63,7 @@ object Server {
             RequestType.set -> executor.submit(
                 Callable {
                     synchronized(writeLock) {
-                        database.set(request.key, request.value)
+                        database.set(request.key, request.value!!)
                     }
                 }
             )
@@ -72,6 +75,7 @@ object Server {
                 }
             )
         }
+        println(response.get())
         return Json.encodeToString(response.get())
     }
 
@@ -105,6 +109,6 @@ object Server {
     // enum values in lowercase because of test requirements
     enum class RequestType {get, set, delete, exit}
     @Serializable
-    class Request(val type: RequestType, val key: String ="", val value: String = "")
+    data class Request(val type: RequestType, val key: JsonElement, val value: JsonElement = JsonPrimitive(""))
 }
 
